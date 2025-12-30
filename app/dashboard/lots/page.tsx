@@ -14,7 +14,9 @@ export default async function LotsPage({
   const params = await searchParams
   const { search, status, product } = params
 
-  let query = supabase.from("traceability_lots").select("*, products(product_name, product_code), facilities(name)")
+  let query = supabase
+    .from("traceability_lot_codes")
+    .select("*, products(product_name, product_code), facilities(name)")
 
   if (search) {
     query = query.or(`tlc.ilike.%${search}%,batch_number.ilike.%${search}%`)

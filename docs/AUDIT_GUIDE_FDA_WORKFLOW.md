@@ -38,7 +38,7 @@ Tài liệu này cung cấp hướng dẫn cho kiểm toán viên để kiểm t
 
 Sử dụng các câu lệnh SQL sau để trích xuất dữ liệu phục vụ hậu kiểm:
 
-```sql
+\`\`\`sql
 -- Xem lịch sử các yêu cầu cập nhật thông tin cơ sở
 SELECT * FROM facility_update_requests ORDER BY created_at DESC;
 

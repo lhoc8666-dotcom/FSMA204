@@ -45,7 +45,7 @@ export default async function ManagerDashboard() {
   ] = await Promise.all([
     supabase.from("facilities").select("*", { count: "exact", head: true }),
     supabase.from("products").select("*", { count: "exact", head: true }),
-    supabase.from("traceability_lots").select("*", { count: "exact", head: true }).eq("status", "active"),
+    supabase.from("traceability_lot_codes").select("*", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("critical_tracking_events").select("*", { count: "exact", head: true }),
     supabase.from("products").select("*", { count: "exact", head: true }).eq("is_ftl", true),
     supabase
@@ -55,7 +55,7 @@ export default async function ManagerDashboard() {
       .limit(5),
     supabase
       .from("products")
-      .select("*, _count:traceability_lots(count)")
+      .select("*, _count:traceability_lot_codes(count)")
       .order("created_at", { ascending: false })
       .limit(5),
     supabase.from("facilities").select(`
@@ -68,7 +68,7 @@ export default async function ManagerDashboard() {
         id,
         product_name,
         is_ftl,
-        traceability_lots(count)
+        traceability_lot_codes(count)
       `),
     supabase
       .from("fda_registrations")
@@ -84,7 +84,7 @@ export default async function ManagerDashboard() {
       .from("critical_tracking_events")
       .select(`
         *,
-        traceability_lots(tlc, products(product_name)),
+        traceability_lot_codes(tlc, products(product_name)),
         facilities(name)
       `)
       .order("event_date", { ascending: false })
@@ -285,9 +285,9 @@ export default async function ManagerDashboard() {
                         </td>
                         <td className="py-4 px-4">
                           <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                            {activity.traceability_lots?.products?.product_name || "N/A"}
+                            {activity.traceability_lot_codes?.products?.product_name || "N/A"}
                           </p>
-                          <p className="text-xs text-slate-500">{activity.traceability_lots?.tlc}</p>
+                          <p className="text-xs text-slate-500">{activity.traceability_lot_codes?.tlc}</p>
                         </td>
                         <td className="py-4 px-4 text-sm text-slate-700 dark:text-slate-300">
                           {activity.facilities?.name || "N/A"}

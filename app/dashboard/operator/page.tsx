@@ -36,15 +36,15 @@ export default async function OperatorDashboard() {
         .select("*", { count: "exact", head: true })
         .gte("event_date", today.toISOString()),
       supabase.from("shipments").select("*", { count: "exact", head: true }).gte("shipment_date", today.toISOString()),
-      supabase.from("traceability_lots").select("*", { count: "exact", head: true }).eq("status", "active"),
+      supabase.from("traceability_lot_codes").select("*", { count: "exact", head: true }).eq("status", "active"),
       supabase
         .from("critical_tracking_events")
-        .select("*, traceability_lots(tlc, products(product_name)), facilities(name)")
+        .select("*, traceability_lot_codes(tlc, products(product_name)), facilities(name)")
         .order("event_date", { ascending: false })
         .limit(10),
       supabase
         .from("shipments")
-        .select("*, traceability_lots(tlc, products(product_name))")
+        .select("*, traceability_lot_codes(tlc, products(product_name))")
         .eq("status", "pending")
         .order("shipment_date", { ascending: false })
         .limit(5),
@@ -177,7 +177,7 @@ export default async function OperatorDashboard() {
                         </span>
                       </div>
                       <p className="text-sm font-medium text-slate-900">
-                        {cte.traceability_lots?.products?.product_name} - {cte.traceability_lots?.tlc}
+                        {cte.traceability_lot_codes?.products?.product_name} - {cte.traceability_lot_codes?.tlc}
                       </p>
                       <p className="text-xs text-slate-500">{cte.facilities?.name}</p>
                     </div>
@@ -215,7 +215,8 @@ export default async function OperatorDashboard() {
                         </Badge>
                       </div>
                       <p className="text-sm text-slate-700">
-                        {shipment.traceability_lots?.products?.product_name} - {shipment.traceability_lots?.tlc}
+                        {shipment.traceability_lot_codes?.products?.product_name} -{" "}
+                        {shipment.traceability_lot_codes?.tlc}
                       </p>
                       <p className="text-xs text-slate-500">
                         {new Date(shipment.shipment_date).toLocaleDateString("vi-VN")}
@@ -285,7 +286,7 @@ export default async function OperatorDashboard() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v12a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"
+                    d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v12a1 1 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
                   />
                 </svg>
               </div>

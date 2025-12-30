@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { requireAuth } from "@/lib/simple-auth"
+import { createServerClient } from "@/lib/supabase/server"
+import { createServiceRoleClient } from "@/lib/supabase/service-role"
 import { logAdminAction } from "@/lib/utils/admin-audit-logger"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -9,55 +9,108 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     console.log("[v0] Fetching user details for ID:", userId)
 
-    const session = await requireAuth(["admin", "system_admin"])
+    const supabase = await createServerClient()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
 
-    console.log("[v0] Current user ID:", session.id)
+    if (authError || !user) {
+      console.error("[v0] Auth error:", authError)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-    const isSystemAdmin = session.role === "system_admin"
-    const isAdmin = session.role === "admin"
+    console.log("[v0] Current user ID:", user.id)
 
-    const profile = await prisma.profiles.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        company_id: true,
-        full_name: true,
-        role: true,
-        phone: true,
-        language_preference: true,
-        created_at: true,
-        updated_at: true,
-        organization_type: true,
-        allowed_cte_types: true,
-        email: true,
-        last_login_at: true,
-      },
-    })
+    // Get current user's profile to check role and company
+    const { data: currentProfile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role, company_id, organization_type")
+      .eq("id", user.id)
+      .single()
 
-    if (!profile) {
-      console.error("[v0] User not found")
+    if (profileError || !currentProfile) {
+      console.error("[v0] Current profile error:", profileError)
+      return NextResponse.json({ error: "User profile not found" }, { status: 403 })
+    }
+
+    console.log("[v0] Current profile:", currentProfile)
+
+    const isSystemAdmin = currentProfile.role === "system_admin"
+    const isAdmin = currentProfile.role === "admin"
+
+    if (!isSystemAdmin && !isAdmin) {
+      console.error("[v0] Insufficient permissions. Role:", currentProfile.role)
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
+    const adminClient = createServiceRoleClient()
+
+    let email = "N/A"
+    let lastSignIn = null
+    let authUser = null
+
+    try {
+      const { data: authData, error: authDataError } = await adminClient.auth.admin.getUserById(userId)
+
+      if (authDataError) {
+        console.error("[v0] Auth data fetch error:", authDataError)
+        return NextResponse.json({ error: "User not found in authentication system" }, { status: 404 })
+      } else if (authData && authData.user) {
+        authUser = authData.user
+        email = authData.user.email || "N/A"
+        lastSignIn = authData.user.last_sign_in_at
+      }
+    } catch (authErr) {
+      console.error("[v0] Failed to fetch auth data:", authErr)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    console.log("[v0] User profile:", profile)
+    const { data: profile, error: userError } = await adminClient
+      .from("profiles")
+      .select(
+        "id, company_id, full_name, role, phone, language_preference, created_at, updated_at, organization_type, allowed_cte_types",
+      )
+      .eq("id", userId)
+      .single()
 
-    if (!isSystemAdmin && profile.company_id && profile.company_id !== session.company_id) {
-      console.error("[v0] Company mismatch. Target:", profile.company_id, "Current:", session.company_id)
+    if (userError && userError.code !== "PGRST116") {
+      console.error("[v0] User fetch error:", userError)
+      return NextResponse.json({ error: "Error fetching user profile", details: userError.message }, { status: 500 })
+    }
+
+    const userProfile = profile || {
+      id: userId,
+      company_id: null,
+      full_name: authUser?.user_metadata?.full_name || email,
+      role: authUser?.user_metadata?.role || "viewer",
+      phone: null,
+      language_preference: "vi",
+      created_at: authUser?.created_at || new Date().toISOString(),
+      updated_at: authUser?.updated_at || new Date().toISOString(),
+      organization_type: null,
+      allowed_cte_types: null,
+    }
+
+    console.log("[v0] User profile:", userProfile)
+
+    if (!isSystemAdmin && userProfile.company_id && userProfile.company_id !== currentProfile.company_id) {
+      console.error("[v0] Company mismatch. Target:", userProfile.company_id, "Current:", currentProfile.company_id)
       return NextResponse.json({ error: "Cannot access users from other companies" }, { status: 403 })
     }
 
-    console.log("[v0] Returning user data with email:", profile.email)
+    console.log("[v0] Returning user data with email:", email)
 
     return NextResponse.json({
-      profile: profile,
+      profile: userProfile,
       auth: {
-        email: profile.email,
-        last_sign_in_at: profile.last_login_at,
+        email,
+        last_sign_in_at: lastSignIn,
       },
     })
   } catch (error: any) {
     console.error("[v0] Error fetching user details:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: error.message || "Internal server error", stack: error.stack }, { status: 500 })
   }
 }
 
@@ -66,31 +119,65 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id: userId } = await params
     const body = await request.json()
 
-    const session = await requireAuth(["admin", "system_admin"])
+    const supabase = await createServerClient()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
 
-    const isSystemAdmin = session.role === "system_admin"
+    if (authError || !user) {
+      console.error("[v0] Auth error:", authError)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-    const targetUser = await prisma.profiles.findUnique({
-      where: { id: userId },
-      select: {
-        company_id: true,
-        role: true,
-        organization_type: true,
-        full_name: true,
-        phone: true,
-      },
-    })
+    console.log("[v0] Current user ID:", user.id)
+
+    // Get current user's profile to check role and company
+    const { data: currentProfile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role, company_id, organization_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !currentProfile) {
+      console.error("[v0] Current profile error:", profileError)
+      return NextResponse.json({ error: "User profile not found" }, { status: 403 })
+    }
+
+    console.log("[v0] Current profile:", currentProfile)
+
+    const isSystemAdmin = currentProfile.role === "system_admin"
+    const isAdmin = currentProfile.role === "admin"
+
+    if (!isSystemAdmin && !isAdmin) {
+      console.error("[v0] Insufficient permissions. Role:", currentProfile.role)
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
+    const adminClient = createServiceRoleClient()
+
+    // Get target user to check authorization
+    const { data: targetUser, error: targetError } = await adminClient
+      .from("profiles")
+      .select("company_id, role, organization_type")
+      .eq("id", userId)
+      .single()
+
+    if (targetError) {
+      console.error("[v0] Target user error:", targetError)
+      return NextResponse.json({ error: "User not found", details: targetError.message }, { status: 404 })
+    }
 
     if (!targetUser) {
       console.error("[v0] Target user profile is null for ID:", userId)
-      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
+      return NextResponse.json({ error: "User profile is null" }, { status: 404 })
     }
 
     console.log("[v0] Target user profile:", targetUser)
 
     // Authorization check: Company admin can only update users in their company
-    if (!isSystemAdmin && targetUser.company_id && targetUser.company_id !== session.company_id) {
-      console.error("[v0] Company mismatch. Target:", targetUser.company_id, "Current:", session.company_id)
+    if (!isSystemAdmin && targetUser.company_id && targetUser.company_id !== currentProfile.company_id) {
+      console.error("[v0] Company mismatch. Target:", targetUser.company_id, "Current:", currentProfile.company_id)
       return NextResponse.json({ error: "Cannot update users from other companies" }, { status: 403 })
     }
 
@@ -114,6 +201,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       organization_type: targetUser.organization_type,
     }
 
+    // Update profile
     const updates = {
       full_name: body.full_name,
       role: body.role,
@@ -122,13 +210,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       language_preference: body.language_preference,
       organization_type: body.organization_type,
       allowed_cte_types: body.allowed_cte_types,
-      updated_at: new Date(),
+      updated_at: new Date().toISOString(),
     }
 
-    await prisma.profiles.update({
-      where: { id: userId },
-      data: updates,
-    })
+    const { error: updateError } = await adminClient.from("profiles").update(updates).eq("id", userId)
+
+    if (updateError) {
+      console.error("[v0] Update error:", updateError)
+      throw new Error(updateError.message)
+    }
 
     const roleChanged = beforeState.role !== body.role
     await logAdminAction({
@@ -154,6 +244,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ success: true })
   } catch (error: any) {
     console.error("[v0] Error updating user:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: error.message || "Internal server error", stack: error.stack }, { status: 500 })
   }
 }

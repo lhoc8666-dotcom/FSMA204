@@ -92,7 +92,7 @@ export default function CreateLotPage() {
     }
 
     try {
-      const { error: insertError } = await supabase.from("traceability_lots").insert(data)
+      const { error: insertError } = await supabase.from("traceability_lot_codes").insert(data)
 
       if (insertError) throw insertError
 

@@ -609,7 +609,7 @@ export default function AdminDashboard() {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground">Hoạt đ���ng:</span>
+                      <span className="text-xs text-muted-foreground">Hoạt động:</span>
                       <span className="font-semibold text-sm">{stats.usAgentsActive}</span>
                     </div>
                     {stats.usAgentsExpiring > 0 && (

@@ -46,7 +46,7 @@ function PrintLotsContent() {
     const supabase = createClient()
 
     let query = supabase
-      .from("traceability_lots")
+      .from("traceability_lot_codes")
       .select("*, products(product_name, product_code), facilities(name)")
       .eq("status", "active")
 

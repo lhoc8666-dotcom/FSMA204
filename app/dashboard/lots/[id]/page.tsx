@@ -12,7 +12,7 @@ export default async function LotDetailPage({ params }: { params: { id: string }
   const { id } = await params
 
   const { data: lot, error } = await supabase
-    .from("traceability_lots")
+    .from("traceability_lot_codes")
     .select("*, products(product_name, product_code), facilities(name, location_code)")
     .eq("id", id)
     .single()

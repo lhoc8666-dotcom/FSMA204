@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error: any) {
-    console.error("[v0] Login error:", error)
+    console.error("Login error:", error)
     return NextResponse.json({ error: error.message || "Login failed" }, { status: 401 })
   }
 }

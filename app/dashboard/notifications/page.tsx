@@ -24,12 +24,12 @@ export default async function NotificationsPage() {
 
   const [expiringLots, expiringFda, expiringAgents, pendingShipments, subscription] = await Promise.all([
     supabase
-      .from("traceability_lots")
+      .from("traceability_lot_codes")
       .select("*, products(product_name), facilities(name)")
-      .lte("expiry_date", thirtyDaysFromNow.toISOString())
-      .gte("expiry_date", today.toISOString())
+      .lte("expiration_date", thirtyDaysFromNow.toISOString())
+      .gte("expiration_date", today.toISOString())
       .eq("status", "active")
-      .order("expiry_date", { ascending: true })
+      .order("expiration_date", { ascending: true })
       .limit(10),
     supabase
       .from("fda_registrations")
@@ -47,7 +47,7 @@ export default async function NotificationsPage() {
       .limit(5),
     supabase
       .from("shipments")
-      .select("*, traceability_lots(tlc, products(product_name))")
+      .select("*, traceability_lot_codes(tlc, products(product_name))")
       .eq("status", "pending")
       .order("shipment_date", { ascending: false })
       .limit(10),
@@ -66,8 +66,8 @@ export default async function NotificationsPage() {
       id: `lot-${lot.id}`,
       type: "expiring_lot" as const,
       title: "Lô hàng sắp hết hạn",
-      description: `${lot.products?.product_name} (${lot.tlc}) sẽ hết hạn vào ${new Date(lot.expiry_date!).toLocaleDateString("vi-VN")}`,
-      date: lot.expiry_date!,
+      description: `${lot.products?.product_name} (${lot.tlc}) sẽ hết hạn vào ${new Date(lot.expiration_date!).toLocaleDateString("vi-VN")}`,
+      date: lot.expiration_date!,
       priority: "high" as const,
       link: `/dashboard/lots/${lot.id}`,
     })) || []),
@@ -93,7 +93,7 @@ export default async function NotificationsPage() {
       id: `shipment-${shipment.id}`,
       type: "pending_shipment" as const,
       title: "Vận chuyển chờ xử lý",
-      description: `${shipment.traceability_lots?.products?.product_name} (${shipment.traceability_lots?.tlc}) đang chờ vận chuyển`,
+      description: `${shipment.traceability_lot_codes?.products?.product_name} (${shipment.traceability_lot_codes?.tlc}) đang chờ vận chuyển`,
       date: shipment.shipment_date,
       priority: "medium" as const,
       link: `/dashboard/shipments/${shipment.id}`,

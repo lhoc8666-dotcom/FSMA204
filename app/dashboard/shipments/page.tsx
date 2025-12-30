@@ -16,7 +16,7 @@ export default async function ShipmentsPage({
 
   let query = supabase
     .from("shipments")
-    .select("*, traceability_lots(tlc, products(product_name)), facilities!shipments_from_facility_id_fkey(name)")
+    .select("*, traceability_lot_codes(tlc, products(product_name)), facilities!shipments_from_facility_id_fkey(name)")
 
   if (search) {
     query = query.or(`shipment_number.ilike.%${search}%,destination_address.ilike.%${search}%`)
@@ -114,11 +114,13 @@ export default async function ShipmentsPage({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
                       <div>
                         <p className="text-slate-500">Mã TLC</p>
-                        <p className="font-mono font-medium">{shipment.traceability_lots?.tlc}</p>
+                        <p className="font-mono font-medium">{shipment.traceability_lot_codes?.tlc}</p>
                       </div>
                       <div>
                         <p className="text-slate-500">Sản phẩm</p>
-                        <p className="font-medium truncate">{shipment.traceability_lots?.products?.product_name}</p>
+                        <p className="font-medium truncate">
+                          {shipment.traceability_lot_codes?.products?.product_name}
+                        </p>
                       </div>
                       <div>
                         <p className="text-slate-500">Từ cơ sở</p>

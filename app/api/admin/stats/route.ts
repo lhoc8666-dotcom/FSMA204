@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         serviceClient.from("companies").select("*", { count: "exact", head: true }),
         serviceClient.from("facilities").select("*", { count: "exact", head: true }),
         serviceClient.from("products").select("*", { count: "exact", head: true }),
-        serviceClient.from("traceability_lots").select("*", { count: "exact", head: true }),
+        serviceClient.from("traceability_lot_codes").select("*", { count: "exact", head: true }),
       ])
 
       const stats = {

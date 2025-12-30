@@ -37,7 +37,6 @@ export function BulkLotsManager() {
     const valid: any[] = []
     const errors: Array<{ row: number; field: string; message: string }> = []
 
-    // Get user's company products and facilities for lookup
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -47,7 +46,6 @@ export function BulkLotsManager() {
 
     if (!profile?.company_id) throw new Error("No company found")
 
-    // Fetch products and facilities
     const { data: products } = await supabase
       .from("products")
       .select("id, product_code")
@@ -65,7 +63,6 @@ export function BulkLotsManager() {
       const row = data[i]
       const rowNum = i + 2
 
-      // Validate required fields
       const tlcError = validateRequired(row.tlc, "tlc")
       const productError = validateRequired(row.product_code, "product_code")
       const facilityError = validateRequired(row.facility_location_code, "facility_location_code")
@@ -81,13 +78,11 @@ export function BulkLotsManager() {
       if (quantityError) errors.push({ row: rowNum, field: "quantity", message: quantityError })
       if (unitError) errors.push({ row: rowNum, field: "unit", message: unitError })
 
-      // Validate expiry date if provided
       if (row.expiry_date) {
         const expiryError = validateDate(row.expiry_date)
         if (expiryError) errors.push({ row: rowNum, field: "expiry_date", message: expiryError })
       }
 
-      // Lookup product and facility IDs
       const productId = productMap.get(row.product_code)
       const facilityId = facilityMap.get(row.facility_location_code)
 
@@ -130,7 +125,7 @@ export function BulkLotsManager() {
   }
 
   const uploadLots = async (lots: any[]) => {
-    const { error } = await supabase.from("traceability_lots").insert(lots)
+    const { error } = await supabase.from("traceability_lot_codes").insert(lots)
 
     if (error) throw error
   }

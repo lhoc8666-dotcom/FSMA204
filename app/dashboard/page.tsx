@@ -43,7 +43,7 @@ export default async function DashboardPage() {
   const [facilities, products, lots, shipments, registrations, kdeStatsResult, activities] = await Promise.all([
     supabase.from("facilities").select("*", { count: "exact", head: true }),
     supabase.from("products").select("*", { count: "exact", head: true }),
-    supabase.from("traceability_lots").select("*", { count: "exact", head: true }),
+    supabase.from("traceability_lot_codes").select("*", { count: "exact", head: true }),
     supabase.from("shipments").select("*", { count: "exact", head: true }),
 
     supabase
@@ -62,7 +62,7 @@ export default async function DashboardPage() {
       .from("critical_tracking_events")
       .select(`
         *,
-        traceability_lots(tlc, products(product_name)),
+        traceability_lot_codes(tlc, products(product_name)),
         facilities(name),
         data_quality_alerts(status, alert_type)
       `)

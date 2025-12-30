@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma"
-import { getSession } from "@/lib/simple-auth"
+import { createServiceRoleClient } from "@/lib/supabase/service-role"
+import { createClient } from "@/lib/supabase/server"
 
 export type AdminAction =
   | "user_create"
@@ -40,47 +40,51 @@ export interface AdminAuditLog {
 
 export async function logAdminAction(data: AdminAuditLog): Promise<void> {
   try {
-    const session = await getSession()
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session?.id) {
+    if (!user) {
       console.error("[v0] Cannot log admin action: No authenticated user")
       return
     }
 
     // Get user profile for additional context
-    const profile = await prisma.profiles.findUnique({
-      where: { id: session.id },
-      select: { role: true, company_id: true, full_name: true },
-    })
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, company_id, full_name")
+      .eq("id", user.id)
+      .single()
 
     if (!profile || !["system_admin", "admin"].includes(profile.role)) {
       console.error("[v0] Cannot log admin action: User is not an admin")
       return
     }
 
+    const serviceClient = createServiceRoleClient()
+
     // Log to system_logs table
-    await prisma.system_logs.create({
-      data: {
-        user_id: session.id,
-        action: data.action,
-        entity_type: data.entityType || "admin_action",
-        entity_id: data.targetEntityId || data.targetUserId || data.targetCompanyId || null,
-        description: data.description,
-        metadata: {
-          ...data.metadata,
-          admin_role: profile.role,
-          admin_name: profile.full_name,
-          admin_company_id: profile.company_id,
-          target_user_id: data.targetUserId,
-          target_company_id: data.targetCompanyId,
-          changes: data.changes,
-          severity: data.severity || "medium",
-          ip_address: data.ipAddress,
-          user_agent: data.userAgent,
-        } as any,
-        ip_address: data.ipAddress || null,
-        user_agent: data.userAgent || null,
+    await serviceClient.from("system_logs").insert({
+      user_id: user.id,
+      action: data.action,
+      entity_type: data.entityType || "admin_action",
+      entity_id: data.targetEntityId || data.targetUserId || data.targetCompanyId || null,
+      description: data.description,
+      metadata: {
+        ...data.metadata,
+        admin_role: profile.role,
+        admin_name: profile.full_name,
+        admin_company_id: profile.company_id,
+        target_user_id: data.targetUserId,
+        target_company_id: data.targetCompanyId,
+        changes: data.changes,
+        severity: data.severity || "medium",
+        ip_address: data.ipAddress,
+        user_agent: data.userAgent,
       },
+      ip_address: data.ipAddress || null,
+      user_agent: data.userAgent || null,
     })
 
     // Log critical actions separately for enhanced monitoring
@@ -109,68 +113,73 @@ export async function getAdminAuditLogs(filters?: {
   severity?: string
   limit?: number
 }) {
-  try {
-    const where: any = {
-      action: {
-        in: [
-          "user_create",
-          "user_update",
-          "user_delete",
-          "user_role_change",
-          "company_create",
-          "company_update",
-          "company_delete",
-          "facility_approve",
-          "facility_reject",
-          "subscription_change",
-          "quota_override",
-          "2fa_enrolled",
-          "2fa_unenrolled",
-          "2fa_verified",
-          "2fa_failed",
-          "admin_login",
-          "admin_logout",
-          "sensitive_data_access",
-        ],
-      },
-    }
+  const serviceClient = createServiceRoleClient()
 
-    if (filters?.action) {
-      where.action = filters.action
-    }
+  let query = serviceClient
+    .from("system_logs")
+    .select("*, profiles!system_logs_user_id_fkey(full_name, role, company_id)")
+    .in("action", [
+      "user_create",
+      "user_update",
+      "user_delete",
+      "user_role_change",
+      "company_create",
+      "company_update",
+      "company_delete",
+      "facility_approve",
+      "facility_reject",
+      "subscription_change",
+      "quota_override",
+      "2fa_enrolled",
+      "2fa_unenrolled",
+      "2fa_verified",
+      "2fa_failed",
+      "admin_login",
+      "admin_logout",
+      "sensitive_data_access",
+    ])
+    .order("created_at", { ascending: false })
 
-    if (filters?.adminId) {
-      where.user_id = filters.adminId
-    }
+  if (filters?.action) {
+    query = query.eq("action", filters.action)
+  }
 
-    if (filters?.dateFrom) {
-      where.created_at = { ...where.created_at, gte: new Date(filters.dateFrom) }
-    }
+  if (filters?.adminId) {
+    query = query.eq("user_id", filters.adminId)
+  }
 
-    if (filters?.dateTo) {
-      where.created_at = { ...where.created_at, lte: new Date(filters.dateTo) }
-    }
+  if (filters?.userId) {
+    query = query.contains("metadata", { target_user_id: filters.userId })
+  }
 
-    const data = await prisma.system_logs.findMany({
-      where,
-      include: {
-        profiles: {
-          select: {
-            full_name: true,
-            role: true,
-            company_id: true,
-          },
-        },
-      },
-      orderBy: {
-        created_at: "desc",
-      },
-      take: filters?.limit || 100,
-    })
+  if (filters?.companyId) {
+    query = query.contains("metadata", { target_company_id: filters.companyId })
+  }
 
-    return data
-  } catch (error) {
+  if (filters?.severity) {
+    query = query.contains("metadata", { severity: filters.severity })
+  }
+
+  if (filters?.dateFrom) {
+    query = query.gte("created_at", filters.dateFrom)
+  }
+
+  if (filters?.dateTo) {
+    query = query.lte("created_at", filters.dateTo)
+  }
+
+  if (filters?.limit) {
+    query = query.limit(filters.limit)
+  } else {
+    query = query.limit(100)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
     console.error("[v0] Failed to fetch admin audit logs:", error)
     return []
   }
+
+  return data || []
 }

@@ -44,7 +44,7 @@ export default async function FacilityDetailPage({ params }: { params: Promise<{
   const isSystemAdmin = profile?.role === "system_admin"
 
   const { data: activeLots } = await supabase
-    .from("traceability_lots")
+    .from("traceability_lot_codes")
     .select("id, tlc, products(product_name)")
     .eq("facility_id", id)
     .eq("status", "active")
@@ -53,7 +53,7 @@ export default async function FacilityDetailPage({ params }: { params: Promise<{
 
   const { data: recentCTEs } = await supabase
     .from("critical_tracking_events")
-    .select("*, traceability_lots(tlc)")
+    .select("*, traceability_lot_codes(tlc)")
     .eq("facility_id", id)
     .order("event_date", { ascending: false })
     .limit(5)
@@ -140,7 +140,7 @@ export default async function FacilityDetailPage({ params }: { params: Promise<{
                   <div key={cte.id} className="flex items-center justify-between p-2 bg-white rounded border text-sm">
                     <div>
                       <span className="font-medium capitalize">{cte.event_type}</span>
-                      <span className="text-slate-500 ml-2">- {cte.traceability_lots?.tlc}</span>
+                      <span className="text-slate-500 ml-2">- {cte.traceability_lot_codes?.tlc}</span>
                     </div>
                     <span className="text-xs text-slate-500">
                       {new Date(cte.event_date).toLocaleDateString("vi-VN")}

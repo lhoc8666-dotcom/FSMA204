@@ -1,65 +1,75 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { jwtVerify } from "jose"
+import { createServerClient } from "@supabase/ssr"
+import { NextResponse, type NextRequest } from "next/server"
 
-const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "your-secret-key-change-in-production")
+export async function proxy(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({
+    request,
+  })
 
-async function getSessionFromRequest(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  // Allow static files and API routes to pass through without auth check
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
+    pathname.includes(".") ||
+    pathname === "/" ||
+    pathname === "/auth/login" ||
+    pathname === "/auth/register"
+  ) {
+    return supabaseResponse
+  }
+
   try {
-    const token = request.cookies.get("auth-token")?.value
-    if (!token) return null
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+            supabaseResponse = NextResponse.next({
+              request,
+            })
+            cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options))
+          },
+        },
+      },
+    )
 
-    const verified = await jwtVerify(token, JWT_SECRET)
-    return verified.payload.user as { id: string; email: string; role: string }
-  } catch {
-    return null
-  }
-}
+    const {
+      data: { user },
+      error,
+    } = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Auth timeout")), 3000)),
+    ]).catch(() => ({ data: { user: null }, error: new Error("Auth failed") }))
 
-export default async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
+    // Only redirect if we got a successful response
+    if (!error) {
+      if (!user && (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))) {
+        const url = request.nextUrl.clone()
+        url.pathname = "/auth/login"
+        return NextResponse.redirect(url)
+      }
 
-  // Allow public routes without authentication
-  const publicRoutes = ["/", "/login", "/register", "/api/auth/login", "/api/auth/register", "/api/auth/logout"]
-  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
-
-  if (isPublicRoute) {
-    return NextResponse.next()
-  }
-
-  // Get session from cookie
-  const session = await getSessionFromRequest(request)
-
-  // Protected routes - require authentication
-  const protectedRoutes = ["/dashboard", "/admin", "/api/traceability", "/api/admin"]
-  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
-
-  if (isProtectedRoute && !session) {
-    const url = request.nextUrl.clone()
-    url.pathname = "/login"
-    url.searchParams.set("redirect", pathname)
-    return NextResponse.redirect(url)
-  }
-
-  // Admin routes - require admin role
-  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
-    if (!session || !["admin", "system_admin"].includes(session.role)) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/unauthorized"
-      return NextResponse.redirect(url)
+      if (user && pathname.startsWith("/auth")) {
+        const url = request.nextUrl.clone()
+        url.pathname = "/dashboard"
+        return NextResponse.redirect(url)
+      }
     }
+  } catch (error) {
+    console.error("[v0] Proxy error:", error)
+    // On error, just let the request pass through
   }
 
-  // Redirect authenticated users away from auth pages
-  if (session && pathname.startsWith("/login")) {
-    const redirectUrl = request.nextUrl.searchParams.get("redirect") || "/dashboard"
-    const url = request.nextUrl.clone()
-    url.pathname = redirectUrl
-    return NextResponse.redirect(url)
-  }
-
-  return NextResponse.next()
+  return supabaseResponse
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 }

@@ -4,11 +4,11 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function GET(request: NextRequest, { params }: { params: { tlc: string } }) {
   try {
     const supabase = await createClient()
-    const { tlc } = await params
+    const { tlc } = params
 
     // Get the initial TLC
     const { data: lot, error: lotError } = await supabase
-      .from("traceability_lots")
+      .from("traceability_lot_codes")
       .select("*, products(product_name, product_code)")
       .eq("tlc", tlc)
       .single()
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest, { params }: { params: { tlc: str
         transformation_cte_id,
         critical_tracking_events!inner(
           tlc_id,
-          traceability_lots(tlc, products(product_name))
+          traceability_lot_codes(tlc, products(product_name))
         )
       `,
       )
@@ -97,8 +97,8 @@ export async function GET(request: NextRequest, { params }: { params: { tlc: str
         ...lot,
         trace_chain: traceChain,
         downstream_lots: downstreamTransformations?.map((t: any) => ({
-          tlc: t.critical_tracking_events?.traceability_lots?.tlc,
-          product_name: t.critical_tracking_events?.traceability_lots?.products?.product_name,
+          tlc: t.critical_tracking_events?.traceability_lot_codes?.tlc,
+          product_name: t.critical_tracking_events?.traceability_lot_codes?.products?.product_name,
         })),
       },
     })

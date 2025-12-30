@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/session"
 import { prisma } from "@/lib/prisma"
 import { type NextRequest, NextResponse } from "next/server"
-import { Decimal } from "@prisma/client/runtime/library"
+import { Decimal } from "@/lib/decimal"
 import { z } from "zod"
 
 const createCTESchema = z.object({

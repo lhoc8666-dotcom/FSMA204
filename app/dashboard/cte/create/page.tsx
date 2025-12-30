@@ -104,7 +104,7 @@ export default function CreateCTEPage() {
       }
 
       const { data: lotsData } = await supabase
-        .from("traceability_lots")
+        .from("traceability_lot_codes")
         .select("id, tlc, products(product_name)")
         .eq("status", "active")
         .order("created_at", { ascending: false })

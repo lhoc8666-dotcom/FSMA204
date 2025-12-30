@@ -28,11 +28,10 @@ export default async function InventoryManagementPage() {
     .eq("company_id", profile.company_id)
     .order("current_stock", { ascending: true })
 
-  // Fallback to real-time if view doesn't exist
   let inventory = inventoryData
   if (error && error.code === "PGRST205") {
     const { data: tlcs } = await supabase
-      .from("traceability_lots")
+      .from("traceability_lot_codes")
       .select("*, products(name), facilities(name)")
       .eq("company_id", profile.company_id)
       .order("available_quantity", { ascending: true })

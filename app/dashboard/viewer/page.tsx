@@ -28,16 +28,16 @@ export default async function ViewerDashboard() {
   const [facilities, products, lots, ctes, shipments, recentCtes, recentLots] = await Promise.all([
     supabase.from("facilities").select("*", { count: "exact", head: true }),
     supabase.from("products").select("*", { count: "exact", head: true }),
-    supabase.from("traceability_lots").select("*", { count: "exact", head: true }),
+    supabase.from("traceability_lot_codes").select("*", { count: "exact", head: true }),
     supabase.from("critical_tracking_events").select("*", { count: "exact", head: true }),
     supabase.from("shipments").select("*", { count: "exact", head: true }),
     supabase
       .from("critical_tracking_events")
-      .select("*, traceability_lots(tlc, products(product_name)), facilities(name)")
+      .select("*, traceability_lot_codes(tlc, products(product_name)), facilities(name)")
       .order("event_date", { ascending: false })
       .limit(5),
     supabase
-      .from("traceability_lots")
+      .from("traceability_lot_codes")
       .select("*, products(product_name), facilities(name)")
       .order("created_at", { ascending: false })
       .limit(5),
@@ -186,7 +186,7 @@ export default async function ViewerDashboard() {
                         </span>
                       </div>
                       <p className="text-sm font-medium text-slate-900">
-                        {cte.traceability_lots?.products?.product_name} - {cte.traceability_lots?.tlc}
+                        {cte.traceability_lot_codes?.products?.product_name} - {cte.traceability_lot_codes?.tlc}
                       </p>
                       <p className="text-xs text-slate-500">{cte.facilities?.name}</p>
                     </div>

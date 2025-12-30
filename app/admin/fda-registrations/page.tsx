@@ -75,8 +75,8 @@ interface Company {
 interface USAgent {
   id: string
   agent_name: string
-  agent_email: string
-  agent_phone: string
+  email: string
+  phone: string
 }
 
 export default function AdminFDARegistrationsPage() {
@@ -206,10 +206,7 @@ export default function AdminFDARegistrationsPage() {
     }
 
     console.log("[v0] Loading US agents...")
-    const agentsQuery = supabase
-      .from("us_agents")
-      .select("id, agent_name, agent_email, agent_phone")
-      .order("agent_name")
+    const agentsQuery = supabase.from("us_agents").select("id, agent_name, email, phone").order("agent_name")
 
     if (currentRole !== "system_admin" && userCompanyId) {
       agentsQuery.eq("company_id", userCompanyId)
@@ -225,9 +222,9 @@ export default function AdminFDARegistrationsPage() {
         hint: agentsError.hint,
       })
 
-      if (agentsError.message?.includes("agent_email")) {
-        console.log("[v0] Retrying US agents query without agent_email column...")
-        const retryQuery = supabase.from("us_agents").select("id, agent_name, agent_phone").order("agent_name")
+      if (agentsError.message?.includes("email")) {
+        console.log("[v0] Retrying US agents query without email column...")
+        const retryQuery = supabase.from("us_agents").select("id, agent_name, phone").order("agent_name")
 
         if (currentRole !== "system_admin" && userCompanyId) {
           retryQuery.eq("company_id", userCompanyId)
@@ -271,7 +268,7 @@ export default function AdminFDARegistrationsPage() {
         companies (name)
       `,
       )
-      .order("expiry_date", { ascending: true })
+      .order("renewal_date", { ascending: true })
 
     if (currentRole !== "system_admin" && userCompanyId) {
       const { data: userFacilities } = await supabase.from("facilities").select("id").eq("company_id", userCompanyId)
@@ -471,14 +468,65 @@ export default function AdminFDARegistrationsPage() {
         status: "active",
       }
 
-      const { error: assignmentError } = await supabase.from("agent_assignments").insert(assignmentData)
+      console.log("[v0] Processing agent assignment:", assignmentData)
 
-      if (assignmentError) {
-        console.error("[v0] Error creating agent assignment:", assignmentError)
+      // Check if assignment already exists with explicit error handling
+      const { data: existingAssignments, error: queryError } = await supabase
+        .from("agent_assignments")
+        .select("id")
+        .eq("fda_registration_id", fdaRegistrationId)
+        .eq("us_agent_id", us_agent_id)
+        .maybeSingle()
+
+      if (queryError) {
+        console.error("[v0] Error checking existing assignments:", queryError)
         toast({
           variant: "destructive",
-          title: "Cảnh báo",
-          description: "Đăng ký FDA thành công nhưng không thể gán US Agent. Vui lòng gán thủ công sau.",
+          title: "Lỗi kiểm tra agent",
+          description: queryError.message,
+        })
+        setIsSaving(false)
+        return
+      }
+
+      console.log("[v0] Existing assignment:", existingAssignments ? "found" : "not found")
+
+      let assignmentError
+
+      if (existingAssignments) {
+        // Update existing assignment
+        console.log("[v0] Updating existing agent assignment:", existingAssignments.id)
+        const result = await supabase.from("agent_assignments").update(assignmentData).eq("id", existingAssignments.id)
+        assignmentError = result.error
+
+        if (!assignmentError) {
+          console.log("[v0] Successfully updated agent assignment")
+          toast({
+            title: "Thành công",
+            description: "Đã cập nhật thông tin US Agent",
+          })
+        }
+      } else {
+        // Create new assignment
+        console.log("[v0] Creating new agent assignment")
+        const result = await supabase.from("agent_assignments").insert(assignmentData)
+        assignmentError = result.error
+
+        if (!assignmentError) {
+          console.log("[v0] Successfully created agent assignment")
+          toast({
+            title: "Thành công",
+            description: "Đã gán US Agent thành công",
+          })
+        }
+      }
+
+      if (assignmentError) {
+        console.error("[v0] Error with agent assignment:", assignmentError)
+        toast({
+          variant: "destructive",
+          title: "Lỗi agent assignment",
+          description: assignmentError.message,
         })
       }
     }
@@ -991,7 +1039,7 @@ export default function AdminFDARegistrationsPage() {
                     <SelectItem value="none">Không chọn (gán sau)</SelectItem>
                     {usAgents.map((agent) => (
                       <SelectItem key={agent.id} value={agent.id}>
-                        {agent.agent_name} ({agent.agent_email})
+                        {agent.agent_name} ({agent.email})
                       </SelectItem>
                     ))}
                   </SelectContent>
