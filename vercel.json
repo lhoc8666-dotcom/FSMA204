@@ -1,5 +1,4 @@
 {
-  "$comment": "Cron jobs disabled due to plan limits. You can manually trigger these endpoints or upgrade your plan.",
   "crons_disabled": [
     {
       "path": "/api/cron/send-notifications",
