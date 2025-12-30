@@ -1,17 +1,16 @@
 "use client"
 
-import { DialogFooter } from "@/components/ui/dialog"
-
-import { DialogDescription } from "@/components/ui/dialog"
-
-import { DialogTitle } from "@/components/ui/dialog"
-
-import { DialogHeader } from "@/components/ui/dialog"
-
-import { DialogContent } from "@/components/ui/dialog"
-
 import { Dialog } from "@/components/ui/dialog"
 
+import {
+  DialogFooter,
+  DialogDescription,
+  DialogTitle,
+  DialogHeader,
+  DialogContent,
+  DialogOverlay,
+  DialogPortal,
+} from "@/components/ui/dialog"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -40,6 +39,7 @@ interface USAgent {
   zip_code: string
   contract_status: string
   notes: string | null
+  company_id: string
 }
 
 export default function AdminUSAgentsPage() {
@@ -51,6 +51,7 @@ export default function AdminUSAgentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [companyId, setCompanyId] = useState<string | null>(null)
 
   const [agentName, setAgentName] = useState("")
   const [agentCompanyName, setAgentCompanyName] = useState("")
@@ -85,8 +86,9 @@ export default function AdminUSAgentsPage() {
       data: { user },
     } = await supabase.auth.getUser()
     if (user) {
-      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+      const { data: profile } = await supabase.from("profiles").select("role, company_id").eq("id", user.id).single()
       setUserRole(profile?.role || null)
+      setCompanyId(profile?.company_id || null)
     }
   }
 
@@ -139,6 +141,7 @@ export default function AdminUSAgentsPage() {
     const supabase = createClient()
 
     const data = {
+      company_id: companyId, // Add company_id to satisfy RLS policy
       agent_name: agentName,
       agent_company_name: agentCompanyName || null,
       agent_type: agentType,
@@ -368,135 +371,143 @@ export default function AdminUSAgentsPage() {
       </Card>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingId ? t("edit-us-agent") : t("add-new-us-agent")}</DialogTitle>
-            <DialogDescription>{t("agent-independent-entity-explanation")}</DialogDescription>
-          </DialogHeader>
+        <DialogPortal>
+          <DialogOverlay />
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{editingId ? t("edit-us-agent") : t("add-new-us-agent")}</DialogTitle>
+              <DialogDescription>{t("agent-independent-entity-explanation")}</DialogDescription>
+            </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="agentName">{t("agent-name")} *</Label>
+                  <Input
+                    id="agentName"
+                    value={agentName}
+                    onChange={(e) => setAgentName(e.target.value)}
+                    placeholder="John Smith"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="agentCompanyName">{t("agent-company")}</Label>
+                  <Input
+                    id="agentCompanyName"
+                    value={agentCompanyName}
+                    onChange={(e) => setAgentCompanyName(e.target.value)}
+                    placeholder="FDA Consulting Inc."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="agentType">{t("agent-type")} *</Label>
+                  <Select value={agentType} onValueChange={setAgentType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individual">{t("individual")}</SelectItem>
+                      <SelectItem value="company">{t("company")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="contractStatus">{t("contract-status")} *</Label>
+                  <Select value={contractStatus} onValueChange={setContractStatus}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">{t("active")}</SelectItem>
+                      <SelectItem value="expired">{t("expired")}</SelectItem>
+                      <SelectItem value="cancelled">{t("cancelled")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="agent@example.com"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">{t("phone")} *</Label>
+                  <Input
+                    id="phone"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="agentName">{t("agent-name")} *</Label>
+                <Label htmlFor="streetAddress">{t("street-address")} *</Label>
                 <Input
-                  id="agentName"
-                  value={agentName}
-                  onChange={(e) => setAgentName(e.target.value)}
-                  placeholder="John Smith"
+                  id="streetAddress"
+                  value={streetAddress}
+                  onChange={(e) => setStreetAddress(e.target.value)}
+                  placeholder="123 Main Street"
                 />
               </div>
 
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city">{t("city")} *</Label>
+                  <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="New York" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="state">{t("state")} *</Label>
+                  <Input id="state" value={state} onChange={(e) => setState(e.target.value)} placeholder="NY" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="zipCode">{t("zip-code")} *</Label>
+                  <Input
+                    id="zipCode"
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value)}
+                    placeholder="10001"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="agentCompanyName">{t("agent-company")}</Label>
-                <Input
-                  id="agentCompanyName"
-                  value={agentCompanyName}
-                  onChange={(e) => setAgentCompanyName(e.target.value)}
-                  placeholder="FDA Consulting Inc."
+                <Label htmlFor="notes">{t("notes")}</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder={t("additional-notes-about-the-agent")}
+                  rows={3}
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="agentType">{t("agent-type")} *</Label>
-                <Select value={agentType} onValueChange={setAgentType}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="individual">{t("individual")}</SelectItem>
-                    <SelectItem value="company">{t("company")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="contractStatus">{t("contract-status")} *</Label>
-                <Select value={contractStatus} onValueChange={setContractStatus}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">{t("active")}</SelectItem>
-                    <SelectItem value="expired">{t("expired")}</SelectItem>
-                    <SelectItem value="cancelled">{t("cancelled")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="agent@example.com"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">{t("phone")} *</Label>
-                <Input
-                  id="phone"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+1 (555) 123-4567"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="streetAddress">{t("street-address")} *</Label>
-              <Input
-                id="streetAddress"
-                value={streetAddress}
-                onChange={(e) => setStreetAddress(e.target.value)}
-                placeholder="123 Main Street"
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="city">{t("city")} *</Label>
-                <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="New York" />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="state">{t("state")} *</Label>
-                <Input id="state" value={state} onChange={(e) => setState(e.target.value)} placeholder="NY" />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="zipCode">{t("zip-code")} *</Label>
-                <Input id="zipCode" value={zipCode} onChange={(e) => setZipCode(e.target.value)} placeholder="10001" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">{t("notes")}</Label>
-              <Textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={t("additional-notes-about-the-agent")}
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
-              {t("cancel")}
-            </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? t("saving") : t("save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDialog(false)}>
+                {t("cancel")}
+              </Button>
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? t("saving") : t("save")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </DialogPortal>
       </Dialog>
     </div>
   )
