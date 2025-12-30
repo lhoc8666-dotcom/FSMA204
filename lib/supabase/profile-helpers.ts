@@ -45,7 +45,6 @@ export async function ensureProfileExists(user: User) {
     full_name: user.user_metadata?.full_name || user.email || "User",
     role: user.user_metadata?.role || "viewer",
     language_preference: user.user_metadata?.language_preference || "vi",
-    organization_type: user.user_metadata?.organization_type || null,
   }
 
   const { data: createdProfile, error: createError } = await supabase
