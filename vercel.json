@@ -1,12 +1,15 @@
 {
-  "crons": [
+  "$comment": "Cron jobs disabled due to plan limits. You can manually trigger these endpoints or upgrade your plan.",
+  "crons_disabled": [
     {
       "path": "/api/cron/send-notifications",
-      "schedule": "0 9 * * *"
+      "schedule": "0 9 * * *",
+      "note": "Manual trigger: curl -H 'Authorization: Bearer YOUR_CRON_SECRET' https://your-domain.com/api/cron/send-notifications"
     },
     {
       "path": "/api/cron/refresh-views",
-      "schedule": "0 10 * * *"
+      "schedule": "0 10 * * *",
+      "note": "Manual trigger: curl -H 'Authorization: Bearer YOUR_CRON_SECRET' https://your-domain.com/api/cron/refresh-views"
     }
   ]
 }
